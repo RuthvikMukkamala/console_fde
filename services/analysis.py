@@ -1,53 +1,21 @@
 from typing import Any
 
-from utils.helpers import logger, today_str
-
-TREND_ARROW = {"UP": "\u2191", "DOWN": "\u2193", "FLAT": "\u2192"}
-
-SIGNAL_MAP: dict[str, dict[str, str]] = {
-    "inflation": {
-        "UP": "Inflation pressure increasing",
-        "DOWN": "Disinflation trend",
-        "FLAT": "Inflation stable",
-    },
-    "labor_market": {
-        "UP": "Labor softening (unemployment rising)",
-        "DOWN": "Tight labor market (unemployment falling)",
-        "FLAT": "Labor market stable",
-    },
-    "treasury_yields": {
-        "UP": "Financial conditions tightening",
-        "DOWN": "Easing financial conditions",
-        "FLAT": "Yields stable",
-    },
-    "inflation_expectations": {
-        "UP": "Forward inflation risk rising",
-        "DOWN": "Inflation expectations anchored / falling",
-        "FLAT": "Expectations stable",
-    },
-}
-
-FLAT_THRESHOLD = 0.005
-
-# Map each dataset to the primary numeric field in its Polygon response
-# Ordered list of fields to try per dataset (first match wins)
-VALUE_FIELDS: dict[str, list[str]] = {
-    "inflation": ["cpi_year_over_year", "cpi"],
-    "labor_market": ["unemployment_rate"],
-    "treasury_yields": ["yield_10_year"],
-    "inflation_expectations": ["model_10_year"],
-}
-
-UNIT_LABELS: dict[str, str] = {
-    "inflation": "% YoY CPI",
-    "labor_market": "% unemployment",
-    "treasury_yields": "% 10Y yield",
-    "inflation_expectations": "% 10Y model",
-}
+from constants import (
+    DATASET_ORDER,
+    DISPLAY_NAMES,
+    FLAT_THRESHOLD,
+    HAWKISH_COMBOS,
+    DOVISH_COMBOS,
+    REGIME_LABELS,
+    SIGNAL_MAP,
+    TREND_ARROW,
+    VALUE_FIELDS,
+)
+from models import TimeSeriesPoint, TrendResult, SignalResult
+from utils.helpers import today_str
 
 
 def _pick_field(record: dict, candidates: list[str]) -> float | None:
-    """Return the value of the first field found in a record."""
     for field in candidates:
         val = record.get(field)
         if val is not None:
@@ -55,15 +23,7 @@ def _pick_field(record: dict, candidates: list[str]) -> float | None:
     return None
 
 
-def extract_time_series(
-    raw: dict[str, Any] | None,
-    dataset: str = "",
-) -> list[dict[str, Any]]:
-    """Extract the full time series from a Polygon Fed response.
-
-    Returns a list of {"date": "YYYY-MM-DD", "value": float} dicts,
-    ascending by date.
-    """
+def extract_time_series(raw: dict[str, Any] | None, dataset: str = "") -> list[TimeSeriesPoint]:
     if raw is None:
         return []
 
@@ -72,57 +32,25 @@ def extract_time_series(
         return []
 
     candidates = VALUE_FIELDS.get(dataset, ["value"])
-    series: list[dict[str, Any]] = []
+    series: list[TimeSeriesPoint] = []
     for record in results:
         val = _pick_field(record, candidates)
         date = record.get("date")
         if val is not None and date is not None:
-            series.append({"date": date, "value": round(val, 4)})
+            series.append(TimeSeriesPoint(date=date, value=round(val, 4)))
     return series
 
 
-def _extract_values(
-    raw: dict[str, Any] | None,
-    dataset: str = "",
-) -> tuple[float | None, float | None]:
-    """Pull the two most recent observation values from a Polygon Fed response.
-
-    Results are ascending by date, so index -1 = latest, -2 = previous.
-    """
-    if raw is None:
-        return None, None
-
-    results = raw.get("results")
-    if not results or not isinstance(results, list):
-        return None, None
-
-    candidates = VALUE_FIELDS.get(dataset, ["value"])
-
-    if len(results) < 2:
-        val = _pick_field(results[-1], candidates)
-        return val, None
-
-    latest = _pick_field(results[-1], candidates)
-    previous = _pick_field(results[-2], candidates)
-    return latest, previous
-
-
-def compute_trend(
-    raw: dict[str, Any] | None,
-    dataset: str = "",
-) -> dict[str, Any] | None:
-    """Compute trend from raw API data. Returns dict with latest, previous, delta, trend."""
-    latest, previous = _extract_values(raw, dataset)
-    if latest is None:
+def compute_trend(raw: dict[str, Any] | None, dataset: str = "") -> TrendResult | None:
+    series = extract_time_series(raw, dataset)
+    if not series:
         return None
 
+    latest = series[-1].value
+    previous = series[-2].value if len(series) >= 2 else None
+
     if previous is None:
-        return {
-            "latest": latest,
-            "previous": None,
-            "delta": None,
-            "trend": "FLAT",
-        }
+        return TrendResult(latest=latest, trend="FLAT")
 
     delta = latest - previous
     if abs(delta) < FLAT_THRESHOLD:
@@ -132,58 +60,27 @@ def compute_trend(
     else:
         trend = "DOWN"
 
-    return {
-        "latest": round(latest, 4),
-        "previous": round(previous, 4),
-        "delta": round(delta, 4),
-        "trend": trend,
-    }
+    return TrendResult(
+        latest=round(latest, 4),
+        previous=round(previous, 4),
+        delta=round(delta, 4),
+        trend=trend,
+    )
 
 
-def generate_signals(
-    trends: dict[str, dict[str, Any] | None],
-) -> dict[str, dict[str, Any]]:
-    """Attach human-readable signal text to each trend."""
-    signals: dict[str, dict[str, Any]] = {}
-    for name, trend_data in trends.items():
-        if trend_data is None:
+def generate_signals(trends: dict[str, TrendResult | None]) -> dict[str, SignalResult]:
+    signals: dict[str, SignalResult] = {}
+    for name, trend in trends.items():
+        if trend is None:
             continue
-        direction = trend_data["trend"]
-        signal_text = SIGNAL_MAP.get(name, {}).get(direction, "No signal")
-        signals[name] = {**trend_data, "signal": signal_text}
+        signal_text = SIGNAL_MAP.get(name, {}).get(trend.trend, "No signal")
+        signals[name] = SignalResult(**trend.model_dump(), signal=signal_text)
     return signals
 
 
-def determine_regime(signals: dict[str, dict[str, Any]]) -> str:
-    """Determine overall macro regime from individual signals.
-
-    Heuristic:
-      - Count hawkish signals (inflation UP, expectations UP, yields UP, labor UP)
-      - Count dovish signals (the opposite directions)
-      - Majority wins; tie → NEUTRAL
-    """
-    # Labor market uses unemployment_rate: UP = loosening (dovish), DOWN = tightening (hawkish)
-    hawkish_combos = {
-        ("inflation", "UP"),
-        ("inflation_expectations", "UP"),
-        ("treasury_yields", "UP"),
-        ("labor_market", "DOWN"),
-    }
-    dovish_combos = {
-        ("inflation", "DOWN"),
-        ("inflation_expectations", "DOWN"),
-        ("treasury_yields", "DOWN"),
-        ("labor_market", "UP"),
-    }
-
-    hawk = 0
-    dove = 0
-    for name, info in signals.items():
-        pair = (name, info["trend"])
-        if pair in hawkish_combos:
-            hawk += 1
-        elif pair in dovish_combos:
-            dove += 1
+def determine_regime(signals: dict[str, SignalResult]) -> str:
+    hawk = sum(1 for n, s in signals.items() if (n, s.trend) in HAWKISH_COMBOS)
+    dove = sum(1 for n, s in signals.items() if (n, s.trend) in DOVISH_COMBOS)
 
     if hawk > dove:
         return "HAWKISH"
@@ -192,42 +89,23 @@ def determine_regime(signals: dict[str, dict[str, Any]]) -> str:
     return "NEUTRAL"
 
 
-def generate_report_text(
-    signals: dict[str, dict[str, Any]],
-    regime: str,
-) -> str:
-    """Build the human-readable macro report string."""
+def generate_report_text(signals: dict[str, SignalResult], regime: str) -> str:
     date = today_str()
     lines = [f"Macro Report ({date})", ""]
 
-    display_names = {
-        "inflation": "Inflation",
-        "labor_market": "Labor Market",
-        "treasury_yields": "Treasury Yields",
-        "inflation_expectations": "Inflation Expectations",
-    }
-
-    for name in ("inflation", "labor_market", "treasury_yields", "inflation_expectations"):
-        info = signals.get(name)
-        if info is None:
-            lines.append(f"- {display_names[name]}: DATA UNAVAILABLE")
+    for name in DATASET_ORDER:
+        sig = signals.get(name)
+        display = DISPLAY_NAMES.get(name, name)
+        if sig is None:
+            lines.append(f"- {display}: DATA UNAVAILABLE")
             continue
 
-        arrow = TREND_ARROW.get(info["trend"], "?")
-        prev = info.get("previous", "?")
-        latest = info.get("latest", "?")
-        sig = info.get("signal", "")
-
-        if prev is not None:
-            lines.append(f"- {display_names[name]}: {arrow} {prev} -> {latest} | {sig}")
+        arrow = TREND_ARROW.get(sig.trend, "?")
+        if sig.previous is not None:
+            lines.append(f"- {display}: {arrow} {sig.previous} -> {sig.latest} | {sig.signal}")
         else:
-            lines.append(f"- {display_names[name]}: {arrow} {latest} | {sig}")
+            lines.append(f"- {display}: {arrow} {sig.latest} | {sig.signal}")
 
-    regime_labels = {
-        "HAWKISH": "Hawkish / Tightening Bias",
-        "DOVISH": "Dovish / Easing Bias",
-        "NEUTRAL": "Neutral / Mixed Signals",
-    }
     lines.append("")
-    lines.append(f"Overall Regime: {regime_labels.get(regime, regime)}")
+    lines.append(f"Overall Regime: {REGIME_LABELS.get(regime, regime)}")
     return "\n".join(lines)
