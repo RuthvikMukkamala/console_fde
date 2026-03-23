@@ -2,6 +2,12 @@
 
 A FastAPI service that pulls macroeconomic data from Polygon's Fed APIs, computes trend signals and regime classification, and writes a structured report into Notion.
 
+## Live Demo
+
+- **Backend API:** [https://console-fde.onrender.com](https://console-fde.onrender.com)
+- **Swagger Docs:** [https://console-fde.onrender.com/docs](https://console-fde.onrender.com/docs)
+- **Streamlit UI:** [https://ruthvikmukkamala-console-fde-app-mfipuh.streamlit.app](https://ruthvikmukkamala-console-fde-app-mfipuh.streamlit.app)
+
 ## How It Works
 
 1. Fetches data from four Polygon Fed endpoints (inflation, labor market, treasury yields, inflation expectations)
@@ -63,10 +69,10 @@ Opens at `http://localhost:8501`. Use the sidebar to configure parameters and cl
 | `author` | string | null | Author name (sets Notion Author property) |
 
 ```bash
-curl -X POST "http://localhost:8000/generate-report?days=50&author=Ruthvik"
+curl -X POST "https://console-fde.onrender.com/generate-report?days=50&author=Ruthvik"
 ```
 
-Interactive docs at [localhost:8000/docs](http://localhost:8000/docs).
+Interactive docs at [console-fde.onrender.com/docs](https://console-fde.onrender.com/docs).
 
 ## Error Handling
 
@@ -104,11 +110,16 @@ Interactive docs at [localhost:8000/docs](http://localhost:8000/docs).
 
 ## Deployment
 
-Deploy to any Python hosting platform (Render, Railway, Fly.io, etc):
+The project is currently deployed as two services:
+
+- **FastAPI backend** on [Render](https://render.com) at `https://console-fde.onrender.com`
+- **Streamlit frontend** on [Streamlit Community Cloud](https://share.streamlit.io) at `https://ruthvikmukkamala-console-fde-app-mfipuh.streamlit.app`
+
+To deploy your own instance:
 
 1. Push to GitHub
-2. Set env vars: `POLYGON_API_KEY`, `NOTION_API_KEY`, `NOTION_DATABASE_ID`
-3. Start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+2. **Backend (Render):** Create a Web Service, set env vars (`POLYGON_API_KEY`, `NOTION_API_KEY`, `NOTION_DATABASE_ID`), and use start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+3. **Frontend (Streamlit Cloud):** Connect the repo and set the main file to `app.py`. Enter your backend URL in the sidebar.
 
 ## APIs Used
 
