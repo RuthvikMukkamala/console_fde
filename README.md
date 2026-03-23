@@ -33,6 +33,7 @@ cp .env.example .env   # Fill in your keys
 | `POLYGON_API_KEY` | Polygon.io API key |
 | `NOTION_API_KEY` | Notion integration token |
 | `NOTION_DATABASE_ID` | Target Notion database ID |
+| `API_SECRET_KEY` | Shared secret for API authentication |
 
 Your Notion database needs a **Report Name** (title) and **Author** (text) property, shared with your integration.
 
@@ -69,7 +70,8 @@ Opens at `http://localhost:8501`. Use the sidebar to configure parameters and cl
 | `author` | string | null | Author name (sets Notion Author property) |
 
 ```bash
-curl -X POST "https://console-fde.onrender.com/generate-report?days=50&author=Ruthvik"
+curl -X POST "https://console-fde.onrender.com/generate-report?days=50&author=Ruthvik" \
+  -H "X-API-Key: your_api_secret_key"
 ```
 
 Interactive docs at [console-fde.onrender.com/docs](https://console-fde.onrender.com/docs).
@@ -118,8 +120,8 @@ The project is currently deployed as two services:
 To deploy your own instance:
 
 1. Push to GitHub
-2. **Backend (Render):** Create a Web Service, set env vars (`POLYGON_API_KEY`, `NOTION_API_KEY`, `NOTION_DATABASE_ID`), and use start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-3. **Frontend (Streamlit Cloud):** Connect the repo and set the main file to `app.py`. Enter your backend URL in the sidebar.
+2. **Backend (Render):** Create a Web Service, set env vars (`POLYGON_API_KEY`, `NOTION_API_KEY`, `NOTION_DATABASE_ID`, `API_SECRET_KEY`), and use start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+3. **Frontend (Streamlit Cloud):** Connect the repo, set the main file to `app.py`, and add `API_SECRET_KEY` to Streamlit secrets. Enter your backend URL in the sidebar.
 
 ## APIs Used
 

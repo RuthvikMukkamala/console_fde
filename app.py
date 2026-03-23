@@ -1,3 +1,5 @@
+import os
+
 import streamlit as st
 import requests
 
@@ -15,6 +17,8 @@ DISPLAY_NAMES = {
     "treasury_yields": "Treasury Yields",
     "inflation_expectations": "Inflation Expectations",
 }
+
+API_KEY = os.environ.get("API_SECRET_KEY", "")
 
 st.title("📊 Daily Macro Intelligence Report")
 
@@ -35,7 +39,12 @@ if generate:
 
     with st.spinner("Fetching data and generating report..."):
         try:
-            resp = requests.post(f"{backend_url}/generate-report", params=params, timeout=120)
+            resp = requests.post(
+                f"{backend_url}/generate-report",
+                params=params,
+                headers={"X-API-Key": API_KEY},
+                timeout=120,
+            )
             resp.raise_for_status()
             data = resp.json()
         except requests.exceptions.ConnectionError:
