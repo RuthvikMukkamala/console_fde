@@ -24,7 +24,7 @@ st.title("📊 Daily Macro Intelligence Report")
 
 with st.sidebar:
     st.header("Configuration")
-    backend_url = st.text_input("Backend URL", value="http://localhost:8000")
+    backend_url = st.text_input("Backend URL", value="https://console-fde.onrender.com")
     days = st.slider("Observations to fetch", min_value=1, max_value=1000, value=100)
     report_name = st.text_input("Report Name", placeholder="Daily Macro Report")
     author = st.text_input("Author", placeholder="Your name")
