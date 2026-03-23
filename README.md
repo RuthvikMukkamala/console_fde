@@ -18,7 +18,6 @@ cd console_fde
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # Fill in your keys
-uvicorn main:app --reload --port 8000
 ```
 
 **Environment variables** (`.env`):
@@ -30,6 +29,24 @@ uvicorn main:app --reload --port 8000
 | `NOTION_DATABASE_ID` | Target Notion database ID |
 
 Your Notion database needs a **Report Name** (title) and **Author** (text) property, shared with your integration.
+
+## Running
+
+**Backend** (FastAPI):
+
+```bash
+uvicorn main:app --reload --port 8000
+```
+
+The API is available at `http://localhost:8000`. Interactive Swagger docs at `http://localhost:8000/docs`.
+
+**Frontend** (Streamlit):
+
+```bash
+streamlit run app.py
+```
+
+Opens at `http://localhost:8501`. Use the sidebar to configure parameters and click "Generate Report" to trigger the backend.
 
 ## API
 
@@ -70,6 +87,7 @@ Interactive docs at [localhost:8000/docs](http://localhost:8000/docs).
 
 ```
 ├── main.py                  # FastAPI app + endpoints
+├── app.py                   # Streamlit frontend
 ├── models.py                # Pydantic data models
 ├── constants.py             # Shared constants
 ├── services/
