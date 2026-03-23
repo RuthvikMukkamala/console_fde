@@ -18,7 +18,7 @@ DISPLAY_NAMES = {
     "inflation_expectations": "Inflation Expectations",
 }
 
-API_KEY = os.environ.get("API_SECRET_KEY", "")
+API_KEY = st.secrets.get("API_SECRET_KEY", os.environ.get("API_SECRET_KEY", ""))
 
 st.title("📊 Daily Macro Intelligence Report")
 
